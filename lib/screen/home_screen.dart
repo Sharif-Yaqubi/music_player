@@ -1,14 +1,16 @@
 import 'package:anim_search_bar/anim_search_bar.dart';
 import 'package:flutter/material.dart';
-import 'package:music_player/provider/favoriteSongProvider.dart';
+import 'package:flutter/widgets.dart';
+import 'package:like_button/like_button.dart';
+import 'package:music_player/provider/search_provider.dart';
 import 'package:music_player/screen/favorite_screen.dart';
 import 'package:provider/provider.dart';
+import 'package:sqflite/sqlite_api.dart';
 import '../constants/color.dart';
 import '../model/play_list.dart';
 import '../model/song.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
 import 'package:carousel_slider/carousel_slider.dart';
-
 import 'song_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -52,31 +54,38 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     Size size = MediaQuery.of(context).size;
+
     return Scaffold(
       backgroundColor: kWhiteColor,
       appBar: AppBar(
-        leading: const Icon(
-          Icons.account_circle,
-          color: kPrimaryColor,
-          size: 40,
+        leading: const Padding(
+          padding: EdgeInsets.only(left: 10),
+          child: Icon(
+            Icons.account_circle,
+            color: kPrimaryColor,
+            size: 40,
+          ),
         ),
         elevation: 0,
         backgroundColor: Colors.white,
         actions: [
-          IconButton(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const FavoritesPage(),
-                  ),
-                );
-              },
-              icon: const Icon(
-                Icons.favorite,
-                size: 40,
-                color: Colors.pink,
-              ))
+          Padding(
+            padding: const EdgeInsets.only(right: 20),
+            child: IconButton(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const FavoritesPage(),
+                    ),
+                  );
+                },
+                icon: const Icon(
+                  Icons.favorite,
+                  size: 40,
+                  color: Colors.pink,
+                )),
+          )
         ],
       ),
       body: Column(
@@ -88,6 +97,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildPlaylistAndSongs(Size size) {
+    final songProvider = Provider.of<SearchProvider>(context);
     return Expanded(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.start,
@@ -104,18 +114,21 @@ class _HomeScreenState extends State<HomeScreen> {
               rtl: true,
               searchIconColor: Colors.white,
               textFieldIconColor: Colors.white,
-              onSubmitted: (p0) {},
+              onSubmitted: (query) {
+                songProvider.searchSongs(query);
+              },
               textController: searchController,
               onSuffixTap: () {
                 setState(() {
                   searchController.clear();
+                  songProvider.searchSongs('');
                 });
               },
             ),
           ),
           const SizedBox(height: 10),
           const Padding(
-            padding: EdgeInsets.only(left: 5),
+            padding: EdgeInsets.only(left: 10),
             child: Text(
               'Recent Play list',
               style: TextStyle(
@@ -139,15 +152,17 @@ class _HomeScreenState extends State<HomeScreen> {
                         image: playlist.image);
                   },
                   options: CarouselOptions(
-                      height: 200,
-                      autoPlay: true,
-                      enlargeCenterPage: true,
-                      enlargeStrategy: CenterPageEnlargeStrategy.height,
-                      onPageChanged: (index, reason) {
-                        setState(() {
-                          activeIndex = index;
-                        });
-                      })),
+                    height: 200,
+                    autoPlay: true,
+                    enlargeCenterPage: true,
+                    enlargeStrategy: CenterPageEnlargeStrategy.height,
+                    onPageChanged: (index, reason) {
+                      setState(() {
+                        activeIndex = index;
+                      });
+                    },
+                  ),
+                ),
           const SizedBox(height: 10.0),
           Center(child: buildIndicator()),
           const SizedBox(height: 10.0),
@@ -162,19 +177,13 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
           const SizedBox(height: 20.0),
-          Flexible(
-            fit: FlexFit.loose,
+          Expanded(
             child: ListView.builder(
               scrollDirection: Axis.vertical,
               shrinkWrap: true,
-              itemCount: songs.length,
-              itemBuilder: (context, index) => buildSonglistItem(
-                image: songs[index].image,
-                title: songs[index].songName,
-                subtitle: songs[index].artist,
-                time: songs[index].time,
-                index: index,
-              ),
+              itemCount: songProvider.songs.length,
+              itemBuilder: (context, index) =>
+                  buildSonglistItem(song: songProvider.songs, index: index),
             ),
           ),
         ],
@@ -182,75 +191,27 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildPlaylistItem({
-    required String title,
-    required String image,
-  }) {
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 15.0, horizontal: 10.0),
-      width: 220,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20.0),
-        image: DecorationImage(image: AssetImage(image), fit: BoxFit.fill),
-      ),
-      child: Align(
-        alignment: Alignment.bottomCenter,
-        child: Row(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(12.0),
-              child: Text(
-                title,
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 20),
-              ),
-            ),
-            Expanded(child: Container(height: 0)),
-            Container(
-              height: 30,
-              width: 30,
-              margin: const EdgeInsets.all(10.0),
-              decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(10.0),
-                  color: Colors.white),
-              child: const Icon(
-                Icons.favorite,
-                color: Colors.pink,
-              ),
-            )
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget buildSonglistItem({
-    required String image,
-    required String title,
-    required String subtitle,
-    required String time,
-    required int index,
-  }) {
-    final favoriteSongProvider = Provider.of<FavoriteSongProvider>(context);
+  Widget buildSonglistItem({required List<Song> song, required int index}) {
     return ListTile(
       onTap: () {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => SongScreen(song: filteredSongs[index]),
+            builder: (context) => SongScreen(
+              song: song,
+              initialIndex: index,
+            ),
           ),
         );
       },
       title: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(title),
+          Text(song[index].songName),
           Padding(
             padding: const EdgeInsets.only(top: 20),
             child: Text(
-              time,
+              song[index].time,
               style: const TextStyle(
                 color: Colors.grey,
               ),
@@ -258,33 +219,22 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      subtitle: Text(subtitle),
+      subtitle: Text(song[index].artist),
       leading: Container(
         height: 60,
         width: 60,
         decoration: BoxDecoration(
           image: DecorationImage(
-            image: AssetImage(image),
+            image: AssetImage(song[index].image),
             fit: BoxFit.fill,
           ),
           borderRadius: BorderRadius.circular(10.0),
         ),
       ),
-      trailing: IconButton(
-        onPressed: () {
-          // favoriteSongProvider.addFavoriteSong(filteredSongs[index]);
-          // ScaffoldMessenger.of(context).showSnackBar(
-          //   SnackBar(
-          //     content: Text(favoriteSongProvider.favorite
-          //         ? 'Removed from favorites!'
-          //         : 'Added to favorites!'),
-          //   ),
-          // );
-        },
-        icon: Icon(
-          Icons.favorite,
-          size: 30,
-          color: favoriteSongProvider.favorite ? Colors.pink : Colors.grey,
+      trailing: const SizedBox(
+        width: 50,
+        child: LikeButton(
+          animationDuration: Duration(milliseconds: 1000),
         ),
       ),
     );

@@ -1,22 +1,20 @@
-import 'dart:convert';
-
 import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-
+import 'package:flutter/widgets.dart';
+import 'package:like_button/like_button.dart';
 import 'package:music_player/model/song.dart';
 import 'package:provider/provider.dart';
-import 'package:rxdart/rxdart.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
 import '../constants/color.dart';
-import '../model/favorite.dart';
 import '../provider/favoriteSongProvider.dart';
 
 class SongScreen extends StatefulWidget {
-  final Song song;
+  final List<Song> song;
+  final int initialIndex;
   const SongScreen({
     super.key,
     required this.song,
+    required this.initialIndex,
   });
 
   @override
@@ -29,10 +27,11 @@ class _SongScreenState extends State<SongScreen> {
   Duration? duration;
   Duration durations = Duration.zero;
   Duration position = Duration.zero;
-
+  int currentIndex = 0;
   @override
   void initState() {
     super.initState();
+    currentIndex = widget.initialIndex;
     _audioPlayer = AudioPlayer();
     _audioPlayer.onPlayerStateChanged.listen((state) {
       setState(() {
@@ -55,14 +54,38 @@ class _SongScreenState extends State<SongScreen> {
   }
 
   void _playSong() async {
-    await _audioPlayer.setSource(AssetSource(widget.song.url));
+    await _audioPlayer.setSource(AssetSource(widget.song[currentIndex].url));
     duration = await _audioPlayer.getDuration();
+  }
+
+  void playNext() {
+    if (currentIndex < widget.song.length - 1) {
+      setState(() {
+        currentIndex++;
+      });
+      _playSong();
+    }
+  }
+
+  void playPrevious() {
+    if (currentIndex > 0) {
+      setState(() {
+        currentIndex--;
+      });
+      _playSong();
+    }
+  }
+
+  @override
+  void dispose() {
+    _audioPlayer.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     Size size = MediaQuery.of(context).size;
-    final favoriteSongProvider = Provider.of<FavoriteSongProvider>(context);
+    final favoriteSongProvider = Provider.of<FavoriteProvider>(context);
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -75,7 +98,7 @@ class _SongScreenState extends State<SongScreen> {
           color: Colors.grey,
         ),
         title: const Text(
-          'Now Playing',
+          'Playing Now ',
           style: TextStyle(
             fontSize: 20.0,
             color: Colors.black,
@@ -94,17 +117,24 @@ class _SongScreenState extends State<SongScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              margin: const EdgeInsets.symmetric(
-                vertical: 30.0,
-                horizontal: 20.0,
-              ),
-              height: size.height * 0.5,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(20.0),
-                image: DecorationImage(
-                  image: AssetImage(widget.song.image),
-                  fit: BoxFit.fill,
+            SizedBox(
+              height: size.height * 0.6,
+              width: double.infinity,
+              child: Card(
+                elevation: 8,
+                margin: const EdgeInsets.symmetric(
+                  vertical: 30.0,
+                  horizontal: 20.0,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(20),
+                  child: Image.asset(
+                    widget.song[currentIndex].image,
+                    fit: BoxFit.fill,
+                  ),
                 ),
               ),
             ),
@@ -113,7 +143,7 @@ class _SongScreenState extends State<SongScreen> {
               child: Row(
                 children: [
                   Text(
-                    widget.song.songName,
+                    widget.song[currentIndex].songName,
                     style: const TextStyle(
                       color: Colors.black,
                       fontSize: 25.0,
@@ -123,13 +153,10 @@ class _SongScreenState extends State<SongScreen> {
                   Expanded(
                     child: Container(),
                   ),
-                  IconButton(
-                    onPressed: () {},
-                    icon: Icon(
-                      Icons.favorite,
-                      color: favoriteSongProvider.favorite
-                          ? Colors.pink
-                          : Colors.grey,
+                  const SizedBox(
+                    width: 50,
+                    child: LikeButton(
+                      animationDuration: Duration(milliseconds: 1000),
                     ),
                   ),
                 ],
@@ -138,7 +165,7 @@ class _SongScreenState extends State<SongScreen> {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20.0),
               child: Text(
-                widget.song.artist,
+                widget.song[currentIndex].artist,
                 style: const TextStyle(
                     color: kLightColor,
                     fontSize: 15.0,
@@ -159,6 +186,7 @@ class _SongScreenState extends State<SongScreen> {
                   await _audioPlayer.resume();
                 },
                 activeColor: Colors.pink,
+                inactiveColor: Colors.grey.withOpacity(0.3),
               ),
             ),
             Padding(
@@ -191,38 +219,49 @@ class _SongScreenState extends State<SongScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
-                  Icon(
-                    Icons.share_outlined,
-                    color: Colors.pink.withOpacity(0.5),
-                    size: 0.09 * size.width,
+                  GestureDetector(
+                    child: Icon(
+                      Icons.share_outlined,
+                      color: Colors.pink.withOpacity(0.5),
+                      size: 0.09 * size.width,
+                    ),
                   ),
-                  Icon(
-                    Icons.skip_previous,
-                    color: Colors.pink,
-                    size: 0.12 * size.width,
+                  GestureDetector(
+                    onTap: playPrevious,
+                    child: Icon(
+                      Icons.skip_previous,
+                      color: Colors.pink,
+                      size: 0.12 * size.width,
+                    ),
                   ),
-                  IconButton(
-                      onPressed: () async {
-                        if (isPlaying) {
-                          await _audioPlayer.pause();
-                        } else {
-                          await _audioPlayer.resume();
-                        }
-                      },
-                      icon: Icon(
-                        isPlaying ? Icons.pause : Icons.play_circle_outline,
-                        color: Colors.pink,
-                        size: 0.18 * size.width,
-                      )),
-                  Icon(
-                    Icons.skip_next,
-                    color: Colors.pink,
-                    size: 0.12 * size.width,
+                  GestureDetector(
+                    onTap: () async {
+                      if (isPlaying) {
+                        await _audioPlayer.pause();
+                      } else {
+                        await _audioPlayer.resume();
+                      }
+                    },
+                    child: Icon(
+                      isPlaying ? Icons.pause : Icons.play_circle_outline,
+                      color: Colors.pink,
+                      size: 0.18 * size.width,
+                    ),
                   ),
-                  Icon(
-                    Icons.swap_horiz,
-                    color: Colors.pink.withOpacity(0.5),
-                    size: 0.09 * size.width,
+                  GestureDetector(
+                    onTap: playNext,
+                    child: Icon(
+                      Icons.skip_next,
+                      color: Colors.pink,
+                      size: 0.12 * size.width,
+                    ),
+                  ),
+                  GestureDetector(
+                    child: Icon(
+                      Icons.swap_horiz,
+                      color: Colors.pink.withOpacity(0.5),
+                      size: 0.09 * size.width,
+                    ),
                   ),
                 ],
               ),

@@ -1,34 +1,31 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import '../model/favorite.dart';
 import 'databaseHelper.dart';
 
-class FavoriteSongProvider with ChangeNotifier {
-  List<FavoriteSong> _favoriteSongs = [];
-  bool _favorite = false;
-  bool get favorite => _favorite;
+class FavoriteProvider with ChangeNotifier {
+  List<FavoriteSong> _favorites = [];
+  final DBHelper _dbHelper = DBHelper();
 
-  List<FavoriteSong> get favoriteSongs => _favoriteSongs;
+  List<FavoriteSong> get favorites => _favorites;
 
-  Future<void> initFavoriteSongs() async {
-    final databaseHelper = DatabaseHelper();
-    final favoriteSongs = await databaseHelper.getFavoriteSongs();
-    _favoriteSongs = favoriteSongs;
+  FavoriteProvider() {
+    _loadFavorites();
+  }
+
+  void _loadFavorites() async {
+    _favorites = await _dbHelper.getFavorites();
     notifyListeners();
   }
 
-  Future<void> addFavoriteSong(FavoriteSong song) async {
-    final databaseHelper = DatabaseHelper();
-    await databaseHelper.insertFavoriteSong(song);
-    _favoriteSongs.add(song);
-    _favorite = true;
+  void addFavorite(FavoriteSong favoriteSong) async {
+    await _dbHelper.insertFavorite(favoriteSong);
+    _favorites.add(favoriteSong);
     notifyListeners();
   }
 
-  Future<void> removeFavoriteSong(String url) async {
-    final databaseHelper = DatabaseHelper();
-    await databaseHelper.deleteFavoriteSong(url);
-    _favoriteSongs.removeWhere((song) => song.url == url);
-    _favorite = false;
+  void removeFavorite(String id) async {
+    await _dbHelper.deleteFavorite(id);
+    _favorites.removeWhere((favorite) => favorite.id == id);
     notifyListeners();
   }
 }

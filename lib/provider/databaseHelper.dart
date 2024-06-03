@@ -1,52 +1,54 @@
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
-
 import '../model/favorite.dart';
 
-class DatabaseHelper {
-  static const String _dbName = 'favorite_songs.db';
-  static const String _tableName = 'favorite_songs';
-
+class DBHelper {
   static Database? _database;
 
-  Future<Database?> get database async {
-    if (_database != null) return _database;
-    _database = await initDB();
-    return _database;
+  Future<Database> get database async {
+    if (_database != null) return _database!;
+    _database = await _initDB();
+    return _database!;
   }
 
-  initDB() async {
-    final path = join(await getDatabasesPath(), _dbName);
-    return await openDatabase(path, version: 1, onCreate: _createDB);
-  }
-
-  _createDB(Database db, int version) async {
-    await db.execute('''
-          CREATE TABLE $_tableName (
-            id INTEGER PRIMARY KEY,
+  Future<Database> _initDB() async {
+    String path = join(await getDatabasesPath(), 'favorites.db');
+    return await openDatabase(
+      path,
+      onCreate: (db, version) async {
+        await db.execute('''
+          CREATE TABLE favorites(
+            id TEXT PRIMARY KEY,
             url TEXT,
             image TEXT,
             name TEXT,
-            artist TEXT
+            artist TEXT,
+            songId INTEGER,
+            time TEXT
           )
-          ''');
+        ''');
+      },
+      version: 1,
+    );
   }
 
-  Future<int> insertFavoriteSong(FavoriteSong song) async {
+  Future<void> insertFavorite(FavoriteSong favoriteSong) async {
     final db = await database;
-    return await db!.insert(_tableName, song.toJson());
+    await db.insert('favorites', favoriteSong.toJson(),
+        conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
-  Future<List<FavoriteSong>> getFavoriteSongs() async {
+  Future<List<FavoriteSong>> getFavorites() async {
     final db = await database;
-    final List<Map<String, dynamic>> maps = await db!.query(_tableName);
+    final List<Map<String, dynamic>> maps = await db.query('favorites');
+
     return List.generate(maps.length, (i) {
       return FavoriteSong.fromJson(maps[i]);
     });
   }
 
-  Future<int> deleteFavoriteSong(String url) async {
+  Future<void> deleteFavorite(String id) async {
     final db = await database;
-    return await db!.delete(_tableName, where: 'url =?', whereArgs: [url]);
+    await db.delete('favorites', where: 'id = ?', whereArgs: [id]);
   }
 }
